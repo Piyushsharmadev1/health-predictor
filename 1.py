@@ -3,17 +3,20 @@ import pickle
 import streamlit as st
 from streamlit_option_menu import option_menu
 import google.generativeai as genai
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 import numpy as np
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+if not GOOGLE_API_KEY:
+    st.error("❌ GOOGLE_API_KEY not found in .env file")
+    st.stop()
 
-API_KEY = st.secrets["GOOGLE_API_KEY"]
-
-
-genai.configure(api_key=API_KEY)
+# -------------------- Configure Gemini --------------------
+genai.configure(api_key=GOOGLE_API_KEY)
 model_gen = genai.GenerativeModel("gemini-flash-latest")
 
-
+# -------------------- Safe AI Function --------------------
 def get_ai_response(prompt):
     try:
        response = model_gen.generate_content(prompt)
@@ -27,7 +30,107 @@ st.set_page_config(
     layout="wide",
     page_icon=""
 )
+ 
+if "page" not in st.session_state:
+    st.session_state.page = "home"
 
+# =========================================================
+# 🏠 LANDING PAGE
+# =========================================================
+if st.session_state.page == "home":
+    st.markdown("""
+        <style>
+        .stApp {
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
+                              url("https://images.unsplash.com/photo-1576091160550-2173dba999ef");
+            background-size: cover;
+            background-position: center;
+        }
+        .title {
+            text-align: center;
+            color: white;
+            font-size: 70px;
+            font-weight: bold;
+            margin-top: 180px;
+        }
+        .subtitle {
+            text-align: center;
+            color: white;
+            font-size: 22px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="title">🧑‍⚕️ Health Predictor AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Predict diseases using AI in seconds</div>', unsafe_allow_html=True)
+
+    if st.button("🚀 Get Started"):
+        st.session_state.page = "app"
+        st.rerun()
+
+    st.stop()
+
+# =========================================================
+# 🧠 MAIN APP (WITH BACKGROUND)
+# =========================================================
+
+# 🔥 Background inside app
+st.markdown("""
+<style>
+
+/* 🌌 Background Image + Dark Overlay */
+.stApp {
+    background-image: 
+        linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)),
+        url("https://images.unsplash.com/photo-1584982751601-97dcc096659c");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* 🧑‍⚕️ Titles */
+h1, h2, h3 {
+    color: white !important;
+    text-align: center;
+}
+
+/* 📦 Input Boxes (Glass Effect) */
+.stSelectbox, .stNumberInput {
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 8px;
+    color: white !important;
+}
+
+/* 📝 Labels */
+label {
+    color: #ffffff !important;
+    font-weight: 500;
+}
+
+/* 🔘 Button Styling */
+.stButton>button {
+    background: linear-gradient(90deg, #ff4b4b, #ff6b6b);
+    color: white;
+    border-radius: 12px;
+    height: 3.5em;
+    font-size: 16px;
+    border: none;
+}
+
+/* 📊 Sidebar */
+section[data-testid="stSidebar"] {
+    background: rgba(0,0,0,0.85);
+}
+
+/* 🧾 Result Text */
+.stSuccess, .stError {
+    font-size: 18px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 working_dir = os.path.dirname(os.path.abspath(__file__))
 diabetes_model = pickle.load(open(os.path.join(working_dir, 'saved_models', 'diabetes_model.sav'), 'rb'))
