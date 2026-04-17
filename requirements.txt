@@ -1,9 +1,8 @@
 streamlit==1.29.0
-numpy==1.24.4
-scikit-learn==1.2.2
-pillow==9.5.0
+numpy==1.26.3
+scikit-learn==1.3.2
 pandas
-
+python-dotenv
 google-generativeai
 streamlit-option-menu
-python-dotenv==1.0.0
+pillow==9.5.0

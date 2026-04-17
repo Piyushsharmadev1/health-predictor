@@ -5,309 +5,137 @@ from streamlit_option_menu import option_menu
 import google.generativeai as genai
 from dotenv import load_dotenv
 import numpy as np
+
+# -------------------- ENV LOAD --------------------
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("❌ GOOGLE_API_KEY not found in .env file")
+    st.error("❌ GOOGLE_API_KEY not found")
     st.stop()
 
-# -------------------- Configure Gemini --------------------
 genai.configure(api_key=GOOGLE_API_KEY)
-model_gen = genai.GenerativeModel("gemini-flash-latest")
+model_gen = genai.GenerativeModel("gemini-1.5-flash")
 
-# -------------------- Safe AI Function --------------------
+# -------------------- AI FUNCTION --------------------
 def get_ai_response(prompt):
     try:
-       response = model_gen.generate_content(prompt)
-       return response.text
+        response = model_gen.generate_content(prompt)
+        return response.text
     except Exception as e:
         return f"❌ AI Error: {str(e)}"
 
+# -------------------- PAGE CONFIG --------------------
+st.set_page_config(page_title="Health Predictor", layout="wide")
 
-st.set_page_config(
-    page_title="Health Predictor",
-    layout="wide",
-    page_icon=""
-)
- 
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-
-# =========================================================
-# 🏠 LANDING PAGE
-# =========================================================
-if st.session_state.page == "home":
-    st.markdown("""
-        <style>
-        .stApp {
-            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
-                              url("https://images.unsplash.com/photo-1576091160550-2173dba999ef");
-            background-size: cover;
-            background-position: center;
-        }
-        .title {
-            text-align: center;
-            color: white;
-            font-size: 70px;
-            font-weight: bold;
-            margin-top: 180px;
-        }
-        .subtitle {
-            text-align: center;
-            color: white;
-            font-size: 22px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div class="title">🧑‍⚕️ Health Predictor AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Predict diseases using AI in seconds</div>', unsafe_allow_html=True)
-
-    if st.button("🚀 Get Started"):
-        st.session_state.page = "app"
-        st.rerun()
-
-    st.stop()
-
-# =========================================================
-# 🧠 MAIN APP (WITH BACKGROUND)
-# =========================================================
-
-# 🔥 Background inside app
-st.markdown("""
-<style>
-
-/* 🌌 Background Image + Dark Overlay */
-.stApp {
-    background-image: 
-        linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)),
-        url("https://images.unsplash.com/photo-1584982751601-97dcc096659c");
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-}
-
-/* 🧑‍⚕️ Titles */
-h1, h2, h3 {
-    color: white !important;
-    text-align: center;
-}
-
-/* 📦 Input Boxes (Glass Effect) */
-.stSelectbox, .stNumberInput {
-    background: rgba(255, 255, 255, 0.15) !important;
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 8px;
-    color: white !important;
-}
-
-/* 📝 Labels */
-label {
-    color: #ffffff !important;
-    font-weight: 500;
-}
-
-/* 🔘 Button Styling */
-.stButton>button {
-    background: linear-gradient(90deg, #ff4b4b, #ff6b6b);
-    color: white;
-    border-radius: 12px;
-    height: 3.5em;
-    font-size: 16px;
-    border: none;
-}
-
-/* 📊 Sidebar */
-section[data-testid="stSidebar"] {
-    background: rgba(0,0,0,0.85);
-}
-
-/* 🧾 Result Text */
-.stSuccess, .stError {
-    font-size: 18px;
-}
-
-</style>
-""", unsafe_allow_html=True)
+# -------------------- SAFE MODEL LOADING --------------------
+def load_model(path):
+    try:
+        return pickle.load(open(path, "rb"))
+    except:
+        st.error(f"❌ Model not found: {path}")
+        return None
 
 working_dir = os.path.dirname(os.path.abspath(__file__))
-diabetes_model = pickle.load(open(os.path.join(working_dir, 'saved_models', 'diabetes_model.sav'), 'rb'))
 heart_model = pickle.load(open(os.path.join(working_dir, 'saved_models', 'rf_classifier.pkl'), 'rb'))
-scaler = pickle.load(open(os.path.join(working_dir, 'saved_models', 'scaler.pkl'), 'rb'))
+diabetes_model = load_model(os.path.join(working_dir, "saved_models/diabetes_model.sav"))
+scaler = load_model(os.path.join(working_dir, "saved_models/scaler.pkl"))
 
+disease_model = load_model(os.path.join(working_dir, "saved_models/disease_model.pkl"))
+label_encoder = load_model(os.path.join(working_dir, "saved_models/label_encoder.pkl"))
+symptoms_list = load_model(os.path.join(working_dir, "saved_models/symptoms.pkl"))
 
-disease_model = pickle.load(open(os.path.join(working_dir, 'saved_models', 'disease_model.pkl'), 'rb'))
-label_encoder = pickle.load(open(os.path.join(working_dir, 'saved_models', 'label_encoder.pkl'), 'rb'))
-symptoms_list = pickle.load(open(os.path.join(working_dir, 'saved_models', 'symptoms.pkl'), 'rb'))
-
-
-def predict(model, scaler, male, age, currentSmoker, cigsPerDay, BPMeds,
-            prevalentStroke, prevalentHyp, diabetes, totChol, sysBP,
-            diaBP, BMI, heartRate, glucose):
-
-    male = 1 if male == 'male' else 0
-    currentSmoker = 1 if currentSmoker == 'yes' else 0
-    BPMeds = 1 if BPMeds == 'yes' else 0
-    prevalentStroke = 1 if prevalentStroke == 'yes' else 0
-    prevalentHyp = 1 if prevalentHyp == 'yes' else 0
-    diabetes = 1 if diabetes == 'yes' else 0
-
-    data = [[male, age, currentSmoker, cigsPerDay, BPMeds,
-             prevalentStroke, prevalentHyp, diabetes, totChol,
-             sysBP, diaBP, BMI, heartRate, glucose]]
-
-    data = scaler.transform(data)
-    return model.predict(data)[0]
-
-
-NORMAL_RANGES = {
-    "Glucose": (70, 140),
-    "BloodPressure": (80, 120),
-    "BMI": (18.5, 24.9),
-    "Cholesterol": (125, 200),
-    "SysBP": (90, 120),
-    "DiaBP": (60, 80),
-    "HeartRate": (60, 100),
-}
-
-def check_normal_ranges(values):
-    abnormal = []
-    for key, val in values.items():
-        if key in NORMAL_RANGES:
-            low, high = NORMAL_RANGES[key]
-            if val < low or val > high:
-                abnormal.append(f"{key} ({val})")
-    return abnormal
-
-
+# -------------------- SIDEBAR --------------------
 with st.sidebar:
     selected = option_menu(
-        'Disease Prediction System',
-        ['Diabetes Prediction', 'Heart Disease Prediction', 'Common Disease Prediction'],
-        menu_icon='hospital-fill',
-        icons=['activity', 'heart', 'stethoscope'],
-        default_index=0
+        "Disease Prediction",
+        ["Diabetes", "Heart", "Common Disease"],
+        icons=["activity", "heart", "stethoscope"]
     )
 
+# =========================================================
+# 🩺 DIABETES
+# =========================================================
+if selected == "Diabetes":
+    st.title("🩺 Diabetes Prediction")
 
-
-
-if selected == 'Diabetes Prediction':
-    st.title('🩺 Diabetes Prediction using ML')
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
-        Pregnancies = st.selectbox('Number of Pregnancies', list(range(0, 21)))
-        SkinThickness = st.selectbox('Skin Thickness', list(range(0, 101, 5)))
-        DiabetesPedigreeFunction = st.selectbox('Diabetes Pedigree Function', [round(x*0.1,1) for x in range(0,31)])
+        Pregnancies = st.number_input("Pregnancies", 0, 20)
+        Glucose = st.number_input("Glucose", 0, 300)
+        BloodPressure = st.number_input("BP", 0, 200)
+        SkinThickness = st.number_input("Skin Thickness", 0, 100)
+
     with col2:
-        Glucose = st.selectbox('Glucose Level', list(range(70, 301, 5)))
-        Insulin = st.selectbox('Insulin Level', list(range(0,901,25)))
-        Age = st.selectbox('Age', list(range(1,121)))
-    with col3:
-        BloodPressure = st.selectbox('Blood Pressure', list(range(80,201,5)))
-        BMI = st.selectbox('BMI', [round(x*0.5,1) for x in range(20,141)])
+        Insulin = st.number_input("Insulin", 0, 900)
+        BMI = st.number_input("BMI", 0.0, 50.0)
+        DPF = st.number_input("DPF", 0.0, 2.5)
+        Age = st.number_input("Age", 1, 120)
 
-    if st.button('Diabetes Test Result'):
-        user_input = [Pregnancies, Glucose, BloodPressure, SkinThickness,
-                      Insulin, BMI, DiabetesPedigreeFunction, Age]
+    if st.button("Predict"):
+        if diabetes_model:
+            input_data = [Pregnancies, Glucose, BloodPressure, SkinThickness,
+                          Insulin, BMI, DPF, Age]
 
-        diab_prediction = diabetes_model.predict([user_input])
+            result = diabetes_model.predict([input_data])
 
-        abnormal_params = check_normal_ranges({"Glucose": Glucose, "BloodPressure": BloodPressure, "BMI": BMI})
+            if result[0] == 1:
+                st.error("⚠️ Diabetic")
+                prompt = "Patient has diabetes. Give diet & precautions."
+            else:
+                st.success("✅ Healthy")
+                prompt = "Patient is healthy. Give fitness tips."
 
-        if diab_prediction[0] == 1 or abnormal_params:
-            st.error('⚠️ The person may have diabetes or abnormal values detected')
-            if abnormal_params:
-                st.warning(f"⚠️ Abnormal values: {', '.join(abnormal_params)}")
-            prompt = f"Patient has diabetes or abnormal values: {', '.join(abnormal_params)}. Glucose: {Glucose}, BMI: {BMI}, Age: {Age}. Give diet, precautions, lifestyle changes."
-        else:
-            st.success('✅ The person is healthy')
-            prompt = "Patient is healthy. Give health tips, diet plan, exercise routine."
-
-        st.subheader("🤖 AI Response")
-        st.write(get_ai_response(prompt))
-        st.warning("⚠️ AI advice only. Consult a doctor.")
-
-
-
-
-if selected == 'Heart Disease Prediction':
-    st.title('❤️ Heart Disease Prediction')
-    col1, col2, col3 = st.columns(3)
-    with col1: male = st.selectbox('Gender', ['male','female']); prevalentHyp = st.selectbox('Hypertension', ['yes','no'])
-    with col2: age = st.number_input('Age', 1,120); diabetes = st.selectbox('Diabetes', ['yes','no'])
-    with col3: currentSmoker = st.selectbox('Current Smoker', ['yes','no']); totChol = st.number_input('Cholesterol',100.0,600.0)
-    with col1: cigsPerDay = st.number_input('Cigarettes Per Day',0.0,50.0)
-    with col2: BPMeds = st.selectbox('BP Medicines', ['yes','no'])
-    with col3: prevalentStroke = st.selectbox('Stroke History',['yes','no'])
-    with col1: sysBP = st.number_input('Systolic BP',80.0,250.0)
-    with col2: diaBP = st.number_input('Diastolic BP',50.0,150.0)
-    with col3: BMI = st.number_input('BMI',10.0,50.0)
-    with col1: heartRate = st.number_input('Heart Rate',40.0,200.0)
-    with col2: glucose = st.number_input('Glucose',50.0,400.0)
-
-    if st.button('Heart Test Result'):
-        result = predict(heart_model, scaler, male, age, currentSmoker, cigsPerDay,
-                         BPMeds, prevalentStroke, prevalentHyp, diabetes,
-                         totChol, sysBP, diaBP, BMI, heartRate, glucose)
-
-        abnormal_params = check_normal_ranges({"SysBP": sysBP,"DiaBP": diaBP,"Cholesterol": totChol,"BMI": BMI,"HeartRate": heartRate,"Glucose": glucose})
-
-        if result==1 or abnormal_params:
-            st.error("⚠️ The patient may have heart disease or abnormal values")
-            if abnormal_params: st.warning(f"⚠️ Abnormal values: {', '.join(abnormal_params)}")
-            prompt = f"Patient details with abnormal values: {', '.join(abnormal_params)}. Age: {age}, BP: {sysBP}/{diaBP}, Cholesterol: {totChol}. Give diet, precautions, lifestyle changes."
-        else:
-            st.success("✅ No Heart Disease")
-            prompt = "Patient is healthy. Give health tips, diet plan, exercise routine."
-
-        st.subheader("🤖 AI Response")
-        st.write(get_ai_response(prompt))
-        st.warning("⚠️ AI advice only. Not a substitute for doctor.")
-
-
-
-
-
-
-if selected == 'Common Disease Prediction':
-    st.title("Common Disease Predictor")
-    
-    st.write("Select your symptoms from below:")
-    
-    
-    selected_symptoms = st.multiselect(
-        "Select Symptoms",
-        symptoms_list
-    )
-    
-    if st.button("Predict Disease"):
-        if not selected_symptoms:
-            st.warning("⚠️ Please select at least one symptom")
-        else:
-            
-            input_vector = [1 if symptom in selected_symptoms else 0 for symptom in symptoms_list]
-            input_vector = np.array(input_vector).reshape(1, -1)
-            
-            
-            pred = disease_model.predict(input_vector)
-            predicted_disease = label_encoder.inverse_transform(pred)[0]
-            
-            st.success(f"Predicted Disease: {predicted_disease}")
-            
-            
-            prompt = f"""
-            Patient shows symptoms: {', '.join(selected_symptoms)}.
-            Predicted disease: {predicted_disease}.
-            Give:
-            - Diet recommendations
-            - Home remedies
-            - Precautions
-            - Warning signs to consult a doctor
-            """
-            st.subheader("🤖 AI Response")
             st.write(get_ai_response(prompt))
-            st.warning("⚠️ AI advice only. Consult a doctor if symptoms persist.")
+
+# =========================================================
+# ❤️ HEART
+# =========================================================
+if selected == "Heart":
+    st.title("❤️ Heart Disease Prediction")
+
+    age = st.number_input("Age", 1, 120)
+    chol = st.number_input("Cholesterol", 100, 600)
+    sysBP = st.number_input("Systolic BP", 80, 250)
+    diaBP = st.number_input("Diastolic BP", 50, 150)
+    BMI = st.number_input("BMI", 10.0, 50.0)
+
+    if st.button("Predict Heart"):
+        if heart_model and scaler:
+            data = [[age, chol, sysBP, diaBP, BMI]]
+            data = scaler.transform(data)
+
+            result = heart_model.predict(data)
+
+            if result[0] == 1:
+                st.error("⚠️ Heart Disease Risk")
+                prompt = "Heart disease patient. Give precautions."
+            else:
+                st.success("✅ Healthy")
+                prompt = "Healthy heart. Give lifestyle tips."
+
+            st.write(get_ai_response(prompt))
+
+# =========================================================
+# 🧠 COMMON DISEASE
+# =========================================================
+if selected == "Common Disease":
+    st.title("🧠 Disease Predictor")
+
+    if symptoms_list:
+        selected_symptoms = st.multiselect("Select Symptoms", symptoms_list)
+
+        if st.button("Predict Disease"):
+            if disease_model and label_encoder:
+
+                input_vector = [1 if s in selected_symptoms else 0 for s in symptoms_list]
+                input_vector = np.array(input_vector).reshape(1, -1)
+
+                pred = disease_model.predict(input_vector)
+                disease = label_encoder.inverse_transform(pred)[0]
+
+                st.success(f"Predicted: {disease}")
+
+                prompt = f"Patient has {disease}. Give treatment advice."
+                st.write(get_ai_response(prompt))
