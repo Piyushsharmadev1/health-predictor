@@ -6,3 +6,4 @@ pandas
 
 google-generativeai
 streamlit-option-menu
+python-dotenv==1.0.0
